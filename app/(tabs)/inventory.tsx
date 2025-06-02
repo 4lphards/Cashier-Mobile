@@ -1,30 +1,16 @@
 "use client"
 
-import { Search, Filter, ChevronDownIcon, Edit, Trash2, Plus } from "lucide-react-native"
-import { TextInput, View, TouchableOpacity, FlatList, Text } from "react-native"
-import { useState } from "react"
-import type { Items } from "~/services/POSService"
+import { Search, Filter, ChevronDown, Edit, Trash2, Plus } from "lucide-react-native"
+import { TextInput, View, TouchableOpacity, FlatList, Text, RefreshControl, Image } from "react-native"
+import { useState, useEffect } from "react"
+import { PosService, type Items } from "~/services/POSService"
 import { formatToIDR } from "~/utils/formatting"
 import DeleteModal from "~/components/delete-modal"
 import EditModal from "~/components/edit-modal"
 import QuickStockModal from "~/components/quick-stock-modal"
 import FilterModal from "~/components/filter-modal"
 import AddModal from "~/components/add-modal"
-
-const dummyData: Items[] = [
-  { id: 1, name: "Keripik Kentang", price: 8000, stock: 45, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 2, name: "Biskuit Cokelat", price: 12000, stock: 32, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 3, name: "Permen Karet", price: 3000, stock: 85, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 4, name: "Wafer Vanilla", price: 15000, stock: 28, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 5, name: "Kacang Atom", price: 6000, stock: 60, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 6, name: "Cokelat Batang", price: 18000, stock: 22, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 7, name: "Kerupuk Udang", price: 5000, stock: 75, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 8, name: "Cookies Oatmeal", price: 14000, stock: 18, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 9, name: "Chiki Balls", price: 4500, stock: 95, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 10, name: "Pocky Strawberry", price: 11000, stock: 40, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 11, name: "Taro Net", price: 7500, stock: 55, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-  { id: 12, name: "Oreo Original", price: 16000, stock: 25, createdAt: "2023-01-01", updatedAt: "2023-01-01" },
-]
+import { useToast } from "~/contexts/toastContext"
 
 interface FilterOption {
   label: string
@@ -32,6 +18,12 @@ interface FilterOption {
 }
 
 export default function Inventory() {
+  const { showToast } = useToast()
+  const [items, setItems] = useState<Items[]>([])
+  const [filteredItems, setFilteredItems] = useState<Items[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
   const [isFilterModalVisible, setFilterModalVisible] = useState(false)
   const [isDeleteModalVisible, setDeleteModalVisible] = useState(false)
   const [isEditModalVisible, setEditModalVisible] = useState(false)
@@ -44,7 +36,6 @@ export default function Inventory() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [currentFilter, setCurrentFilter] = useState<string | null>(null)
-  const [filteredItems, setFilteredItems] = useState<Items[]>(dummyData)
 
   const filterOptions = [
     { label: "A ~ Z", value: "asc" },
@@ -55,50 +46,40 @@ export default function Inventory() {
     { label: "Harga Tertinggi", value: "highPrice" },
   ]
 
-  const getFilterLabel = (filterValue: string | null): string => {
-    const filter = filterOptions.find((option) => option.value === filterValue)
-    return filter ? filter.label : "Semua"
+  const fetchItems = async () => {
+    try {
+      const data = await PosService.getItems()
+      setItems(data)
+      applyFiltersAndSearch(data, searchQuery, currentFilter)
+    } catch (error) {
+      console.error("Error fetching items:", error)
+      showToast("Gagal memuat data barang", "error")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }
 
-  const handleFilterSelect = (filter: FilterOption): void => {
-    setFilterModalVisible(false)
-    setCurrentFilter(filter.value)
+  useEffect(() => {
+    fetchItems()
+  })
 
-    let sortedItems = [...dummyData]
-    switch (filter.value) {
-      case "asc":
-        sortedItems.sort((a, b) => a.name.localeCompare(b.name))
-        break
-      case "desc":
-        sortedItems.sort((a, b) => b.name.localeCompare(a.name))
-        break
-      case "lowStock":
-        sortedItems.sort((a, b) => a.stock - b.stock)
-        break
-      case "highStock":
-        sortedItems.sort((a, b) => b.stock - a.stock)
-        break
-      case "lowPrice":
-        sortedItems.sort((a, b) => a.price - b.price)
-        break
-      case "highPrice":
-        sortedItems.sort((a, b) => b.price - a.price)
-        break
-    }
-
-    if (searchQuery.length > 0) {
-      sortedItems = sortedItems.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    }
-
-    setFilteredItems(sortedItems)
+  const onRefresh = () => {
+    setRefreshing(true)
+    fetchItems()
   }
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
-    const filtered = dummyData.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
+  const applyFiltersAndSearch = (itemList: Items[], query: string, filter: string | null) => {
+    let filtered = [...itemList]
 
-    if (currentFilter) {
-      switch (currentFilter) {
+    // Apply search filter
+    if (query.length > 0) {
+      filtered = filtered.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
+    }
+
+    // Apply sorting filter
+    if (filter) {
+      switch (filter) {
         case "asc":
           filtered.sort((a, b) => a.name.localeCompare(b.name))
           break
@@ -123,9 +104,35 @@ export default function Inventory() {
     setFilteredItems(filtered)
   }
 
-  const handleDeleteItem = (id: number) => {
-    const updatedItems = filteredItems.filter((item) => item.id !== id)
-    setFilteredItems(updatedItems)
+  const getFilterLabel = (filterValue: string | null): string => {
+    const filter = filterOptions.find((option) => option.value === filterValue)
+    return filter ? filter.label : "Semua"
+  }
+
+  const handleFilterSelect = (filter: FilterOption): void => {
+    setFilterModalVisible(false)
+    setCurrentFilter(filter.value)
+    applyFiltersAndSearch(items, searchQuery, filter.value)
+  }
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+    applyFiltersAndSearch(items, query, currentFilter)
+  }
+
+  const handleDeleteItem = async (id: number) => {
+    try {
+      const success = await PosService.deleteItem(id)
+      if (success) {
+        await fetchItems() // Refresh the list
+        showToast("Barang berhasil dihapus", "success")
+      } else {
+        showToast("Gagal menghapus barang", "error")
+      }
+    } catch (error) {
+      console.error("Error deleting item:", error)
+      showToast("Terjadi kesalahan saat menghapus barang", "error")
+    }
     setDeleteModalVisible(false)
     setItemToDelete(null)
   }
@@ -140,10 +147,33 @@ export default function Inventory() {
     setEditModalVisible(true)
   }
 
-  const handleEditSave = (editedItem: Items) => {
-    const updatedItems = filteredItems.map((item) => (item.id === editedItem.id ? editedItem : item))
-    setFilteredItems(updatedItems)
-    console.log("Item saved:", editedItem)
+  const handleEditSave = async (
+    editedItem: Items,
+    imageFile?: { uri: string; name: string },
+    removeImage?: boolean,
+  ) => {
+    try {
+      const updated = await PosService.updateItem(
+        editedItem.id,
+        {
+          name: editedItem.name,
+          price: editedItem.price,
+          stock: editedItem.stock,
+          barcode: editedItem.barcode,
+        },
+        imageFile,
+        removeImage,
+      )
+      if (updated) {
+        await fetchItems() // Refresh the list
+        showToast("Barang berhasil diperbarui", "success")
+      } else {
+        showToast("Gagal memperbarui barang", "error")
+      }
+    } catch (error) {
+      console.error("Error updating item:", error)
+      showToast("Terjadi kesalahan saat memperbarui barang", "error")
+    }
   }
 
   const openQuickStockModal = (item: Items) => {
@@ -151,38 +181,52 @@ export default function Inventory() {
     setQuickStockModalVisible(true)
   }
 
-  const handleStockChange = (item: Items, stockChange: number) => {
-    const updatedItems = filteredItems.map((currentItem) => {
-      if (currentItem.id === item.id) {
-        const newStock = Math.max(0, currentItem.stock + stockChange)
-        return { ...currentItem, stock: newStock }
+  const handleStockChange = async (item: Items, stockChange: number) => {
+    try {
+      const updated = await PosService.updateItemStock(item.id, stockChange)
+      if (updated) {
+        await fetchItems() // Refresh the list
+        const action = stockChange > 0 ? "ditambah" : "dikurangi"
+        showToast(`Stok ${item.name} berhasil ${action}`, "success")
+      } else {
+        showToast("Gagal mengubah stok", "error")
       }
-      return currentItem
-    })
-    setFilteredItems(updatedItems)
+    } catch (error) {
+      console.error("Error updating stock:", error)
+      showToast("Terjadi kesalahan saat mengubah stok", "error")
+    }
   }
 
   const handleResetFilter = () => {
     setCurrentFilter(null)
-    setFilteredItems(dummyData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase())))
+    applyFiltersAndSearch(items, searchQuery, null)
     setFilterModalVisible(false)
   }
 
-  const handleAddItem = (newItem: Omit<Items, "id" | "createdAt" | "updatedAt">) => {
-    // Generate a new ID (in a real app, this would come from the backend)
-    const newId = Math.max(...filteredItems.map((item) => item.id)) + 1
-    const now = new Date().toISOString()
-
-    const itemToAdd: Items = {
-      ...newItem,
-      id: newId,
-      createdAt: now,
-      updatedAt: now,
+  const handleAddItem = async (
+    newItem: Omit<Items, "id" | "created_at" | "updated_at">,
+    imageFile?: { uri: string; name: string },
+  ) => {
+    try {
+      const created = await PosService.createItem(newItem, imageFile)
+      if (created) {
+        await fetchItems() // Refresh the list
+        showToast("Barang berhasil ditambahkan", "success")
+      } else {
+        showToast("Gagal menambahkan barang", "error")
+      }
+    } catch (error) {
+      console.error("Error creating item:", error)
+      showToast("Terjadi kesalahan saat menambahkan barang", "error")
     }
+  }
 
-    const updatedItems = [...filteredItems, itemToAdd]
-    setFilteredItems(updatedItems)
-    console.log("New item added:", itemToAdd)
+  if (loading) {
+    return (
+      <View className="items-center justify-center flex-1 p-4 bg-white">
+        <Text className="text-gray-600">Memuat data...</Text>
+      </View>
+    )
   }
 
   return (
@@ -192,7 +236,7 @@ export default function Inventory() {
           <View className="relative flex-row items-center">
             <Search className="absolute" size={20} color="#9CA3AF" />
             <TextInput
-              className="flex-1 p-2"
+              className="flex-1 p-2 pl-8"
               placeholder="Cari barang..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
@@ -235,7 +279,7 @@ export default function Inventory() {
             onPress={() => {
               setCurrentFilter(null)
               setSearchQuery("")
-              setFilteredItems(dummyData)
+              applyFiltersAndSearch(items, "", null)
             }}
           >
             <Text className="text-sm text-center">X</Text>
@@ -247,14 +291,32 @@ export default function Inventory() {
         data={filteredItems}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={{ paddingBottom: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={
+          <View className="items-center justify-center flex-1 p-8">
+            <Text className="text-center text-gray-500">
+              {searchQuery || currentFilter ? "Tidak ada barang yang sesuai dengan filter" : "Belum ada barang"}
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => (
           <View className="p-4 mb-3 bg-white border border-gray-100 rounded-[8px] shadow-sm">
             <View className="flex-row items-start mb-3">
               <View className="w-20 h-20 mr-3 bg-gray-100 border border-gray-200 rounded-[8px] justify-center items-center">
-                <Text className="text-xs text-gray-400">IMG</Text>
+                {item.image_url ? (
+                  <Image
+                    source={{ uri: item.image_url }}
+                    className="w-full h-full rounded-[8px]"
+                    resizeMode="cover"
+                    onError={() => console.log("Failed to load image")}
+                  />
+                ) : (
+                  <Text className="text-xs text-gray-400">IMG</Text>
+                )}
               </View>
               <View className="flex-1">
                 <Text className="mb-1 text-lg font-semibold text-gray-800">{item.name}</Text>
+                {item.barcode && <Text className="text-xs text-gray-500">Barcode: {item.barcode}</Text>}
               </View>
               <View className="flex-row">
                 <View className="p-[2px] rounded-[8px] bg-blue-50">
@@ -273,7 +335,9 @@ export default function Inventory() {
             <View className="flex-row items-center justify-between">
               <View>
                 <Text className="mb-1 text-xs text-gray-500">Stok</Text>
-                <Text className="text-sm font-medium text-gray-800">{item.stock} pcs</Text>
+                <Text className={`text-sm font-medium ${item.stock === 0 ? "text-red-600" : "text-gray-800"}`}>
+                  {item.stock} pcs
+                </Text>
               </View>
               <View>
                 <Text className="mb-1 text-xs text-gray-500">Harga</Text>
@@ -285,7 +349,7 @@ export default function Inventory() {
                 onPress={() => openQuickStockModal(item)}
               >
                 <Text className="mr-1 text-sm font-medium text-blue-600">Ubah Stok</Text>
-                <ChevronDownIcon size={16} color="#2563EB" />
+                <ChevronDown size={16} color="#2563EB" />
               </TouchableOpacity>
             </View>
           </View>

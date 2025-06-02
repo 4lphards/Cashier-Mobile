@@ -4,17 +4,17 @@ import { Modal, View, Text, TouchableOpacity, TextInput, Alert, Image } from "re
 import { useState, useEffect, useRef } from "react"
 import { Camera as LucideCamera, X, RotateCcw } from "lucide-react-native"
 import type { Items } from "~/services/POSService"
-import * as DocumentPicker from 'expo-document-picker';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import * as DocumentPicker from "expo-document-picker"
+import { CameraView, type CameraType, useCameraPermissions } from "expo-camera"
 
 interface AddModalProps {
   visible: boolean
   onClose: () => void
-  onSave: (item: Omit<Items, "id" | "createdAt" | "updatedAt">) => void
+  onSave: (item: Omit<Items, "id" | "created_at" | "updated_at">, imageFile?: { uri: string; name: string }) => void
 }
 
 export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
-  const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null)
   const [newItem, setNewItem] = useState({
     name: "",
     price: 0,
@@ -22,9 +22,10 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
   })
   const [hasImage, setHasImage] = useState(false)
   const [cameraVisible, setCameraVisible] = useState(false)
-  const [facing, setFacing] = useState<CameraType>('back');
-  const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
+  const [facing, setFacing] = useState<CameraType>("back")
+  const [permission, requestPermission] = useCameraPermissions()
+  const [saving, setSaving] = useState(false)
+  const cameraRef = useRef<CameraView>(null)
 
   useEffect(() => {
     if (visible) {
@@ -36,6 +37,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
       })
       setHasImage(false)
       setFile(null)
+      setSaving(false)
     }
   }, [visible])
 
@@ -44,7 +46,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
     setHasImage(!!file)
   }, [file])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validation
     if (!newItem.name.trim()) {
       Alert.alert("Error", "Nama barang tidak boleh kosong")
@@ -61,8 +63,21 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
       return
     }
 
-    onSave(newItem)
-    onClose()
+    setSaving(true)
+
+    try {
+      // Prepare image file if exists
+      const imageFile = file ? { uri: file.uri, name: file.name } : undefined
+
+      // Call onSave with item data and image file
+      await onSave(newItem, imageFile)
+      onClose()
+    } catch (error) {
+      console.error("Error saving item:", error)
+      Alert.alert("Error", "Gagal menyimpan item")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleImagePicker = () => {
@@ -84,63 +99,59 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
 
   const openCamera = async () => {
     if (!permission) {
-      // Camera permissions are still loading
-      return;
+      return
     }
 
     if (!permission.granted) {
-      // Request permission
-      const result = await requestPermission();
+      const result = await requestPermission()
       if (!result.granted) {
-        Alert.alert("Error", "Izin kamera ditolak");
-        return;
+        Alert.alert("Error", "Izin kamera ditolak")
+        return
       }
     }
 
-    setCameraVisible(true);
-  };
+    setCameraVisible(true)
+  }
 
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync();
+        const photo = await cameraRef.current.takePictureAsync()
         if (photo) {
           setFile({
             uri: photo.uri,
             name: `photo_${Date.now()}.jpg`,
-            mimeType: 'image/jpeg',
-            size: 0, // Size is unknown at this point
-          });
-          setCameraVisible(false);
+            mimeType: "image/jpeg",
+            size: 0,
+          })
+          setCameraVisible(false)
         }
       } catch (error) {
-        console.error("Error taking picture:", error);
-        Alert.alert("Error", "Gagal mengambil gambar");
+        console.error("Error taking picture:", error)
+        Alert.alert("Error", "Gagal mengambil gambar")
       }
     }
-  };
+  }
 
   const toggleCameraFacing = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
-  };
+    setFacing((current) => (current === "back" ? "front" : "back"))
+  }
 
   const openGallery = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "image/*",
         copyToCacheDirectory: true,
-      });
+      })
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setFile(result.assets[0]);
-      } else {
-        console.log("User canceled the picker");
+        setFile(result.assets[0])
       }
     } catch (error) {
-      console.error("Error picking document:", error);
-      Alert.alert("Error", "Terjadi kesalahan saat memilih gambar");
+      console.error("Error picking document:", error)
+      Alert.alert("Error", "Terjadi kesalahan saat memilih gambar")
     }
-  };
+  }
 
   const removeImage = () => {
     setFile(null)
@@ -153,35 +164,18 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
     return (
       <Modal visible={true} transparent={false} animationType="slide">
         <View className="flex-1">
-          <CameraView
-            ref={cameraRef}
-            style={{ flex: 1 }}
-            facing={facing}
-          >
+          <CameraView ref={cameraRef} style={{ flex: 1 }} facing={facing}>
             <View className="justify-between flex-1 p-6 bg-transparent">
-              {/* Top controls */}
               <View className="flex-row items-center justify-between mt-12">
-                <TouchableOpacity 
-                  className="p-3 rounded-full bg-black/50"
-                  onPress={() => setCameraVisible(false)}
-                >
+                <TouchableOpacity className="p-3 rounded-full bg-black/50" onPress={() => setCameraVisible(false)}>
                   <X size={24} color="#ffffff" />
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  className="p-3 rounded-full bg-black/50"
-                  onPress={toggleCameraFacing}
-                >
+                <TouchableOpacity className="p-3 rounded-full bg-black/50" onPress={toggleCameraFacing}>
                   <RotateCcw size={24} color="#ffffff" />
                 </TouchableOpacity>
               </View>
-
-              {/* Bottom controls */}
               <View className="flex-row items-center justify-center mb-12">
-                <TouchableOpacity 
-                  className="p-4 bg-white border-4 border-gray-300 rounded-full"
-                  onPress={takePicture}
-                >
+                <TouchableOpacity className="p-4 bg-white border-4 border-gray-300 rounded-full" onPress={takePicture}>
                   <View className="w-16 h-16 bg-white rounded-full" />
                 </TouchableOpacity>
               </View>
@@ -189,7 +183,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
           </CameraView>
         </View>
       </Modal>
-    );
+    )
   }
 
   return (
@@ -206,7 +200,6 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
             </TouchableOpacity>
           </View>
 
-          {/* Image Section */}
           <Text className="mb-2 text-sm text-gray-600">Gambar Barang</Text>
           <View className="items-center mb-4">
             {file ? (
@@ -233,6 +226,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
             <TouchableOpacity
               className="flex-row items-center bg-blue-100 rounded-[8px] px-3 py-2 mt-3"
               onPress={handleImagePicker}
+              disabled={saving}
             >
               <LucideCamera size={16} color="#3B82F6" />
               <Text className="ml-2 text-sm font-medium text-blue-600">
@@ -247,6 +241,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
             value={newItem.name}
             onChangeText={(text) => setNewItem({ ...newItem, name: text })}
             placeholder="Masukkan nama barang"
+            editable={!saving}
           />
 
           <Text className="mb-2 text-sm text-gray-600">Harga *</Text>
@@ -256,6 +251,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
             value={newItem.price > 0 ? newItem.price.toString() : ""}
             onChangeText={(text) => setNewItem({ ...newItem, price: Number.parseInt(text) || 0 })}
             placeholder="0"
+            editable={!saving}
           />
 
           <Text className="mb-2 text-sm text-gray-600">Stok Awal *</Text>
@@ -265,19 +261,22 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
             value={newItem.stock > 0 ? newItem.stock.toString() : ""}
             onChangeText={(text) => setNewItem({ ...newItem, stock: Number.parseInt(text) || 0 })}
             placeholder="0"
+            editable={!saving}
           />
 
           <View className="flex-row justify-end space-x-3">
-            <TouchableOpacity className="px-4 py-2 bg-gray-200 rounded-[8px]" onPress={onClose}>
+            <TouchableOpacity className="px-4 py-2 bg-gray-200 rounded-[8px]" onPress={onClose} disabled={saving}>
               <Text className="text-sm text-gray-800">Batal</Text>
             </TouchableOpacity>
             <View className="w-4" />
             <TouchableOpacity
-              className={`px-4 py-2 rounded-[8px] ${isFormValid ? "bg-blue-500" : "bg-gray-300"}`}
+              className={`px-4 py-2 rounded-[8px] ${isFormValid && !saving ? "bg-blue-500" : "bg-gray-300"}`}
               onPress={handleSave}
-              disabled={!isFormValid}
+              disabled={!isFormValid || saving}
             >
-              <Text className={`text-sm ${isFormValid ? "text-white" : "text-gray-500"}`}>Simpan</Text>
+              <Text className={`text-sm ${isFormValid && !saving ? "text-white" : "text-gray-500"}`}>
+                {saving ? "Menyimpan..." : "Simpan"}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

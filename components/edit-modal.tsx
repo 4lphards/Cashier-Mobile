@@ -1,30 +1,58 @@
 "use client"
 
-import { Modal, View, Text, TouchableOpacity, TextInput, Image, Alert } from "react-native"
-import { useState, useEffect } from "react"
-import { Camera, Trash2 } from "lucide-react-native"
+import { Modal, View, Text, TouchableOpacity, TextInput, Alert, Image } from "react-native"
+import { useState, useEffect, useRef } from "react"
+import { Camera as LucideCamera, X, RotateCcw } from "lucide-react-native"
 import type { Items } from "~/services/POSService"
+import * as DocumentPicker from "expo-document-picker"
+import { CameraView, type CameraType, useCameraPermissions } from "expo-camera"
 
 interface EditModalProps {
   visible: boolean
   item: Items | null
   onClose: () => void
-  onSave: (item: Items) => void
+  onSave: (item: Items, imageFile?: { uri: string; name: string }, removeImage?: boolean) => void
 }
 
 export default function EditModal({ visible, item, onClose, onSave }: EditModalProps) {
   const [editedItem, setEditedItem] = useState<Items | null>(null)
+  const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null)
+  const [hasImage, setHasImage] = useState(false)
+  const [imageRemoved, setImageRemoved] = useState(false)
+  const [cameraVisible, setCameraVisible] = useState(false)
+  const [facing, setFacing] = useState<CameraType>("back")
+  const [permission, requestPermission] = useCameraPermissions()
+  const [saving, setSaving] = useState(false)
+  const cameraRef = useRef<CameraView>(null)
 
   useEffect(() => {
     if (item) {
       setEditedItem({ ...item })
+      setHasImage(!!item.image_url)
+      setImageRemoved(false)
+      setFile(null)
+      setSaving(false)
     }
   }, [item])
 
-  const handleSave = () => {
+  useEffect(() => {
+    setHasImage((!!file || !!editedItem?.image_url) && !imageRemoved)
+  }, [file, editedItem, imageRemoved])
+
+  const handleSave = async () => {
     if (editedItem) {
-      onSave(editedItem)
-      onClose()
+      setSaving(true)
+
+      try {
+        const imageFile = file ? { uri: file.uri, name: file.name } : undefined
+        await onSave(editedItem, imageFile, imageRemoved)
+        onClose()
+      } catch (error) {
+        console.error("Error saving item:", error)
+        Alert.alert("Error", "Gagal menyimpan perubahan")
+      } finally {
+        setSaving(false)
+      }
     }
   }
 
@@ -45,48 +73,93 @@ export default function EditModal({ visible, item, onClose, onSave }: EditModalP
     ])
   }
 
-  const openCamera = () => {
-    // Placeholder for camera functionality
-    // In a real app, you would use react-native-image-picker or expo-image-picker
-    console.log("Opening camera...")
-    // For demo purposes, we would upload the image and the backend would save it with the item ID
-    if (editedItem) {
-      // The actual image upload would happen here
-      // The backend would save the image using the item ID as reference
-      Alert.alert("Sukses", "Foto berhasil diambil dan diunggah")
+  const openCamera = async () => {
+    if (!permission) {
+      return
+    }
+
+    if (!permission.granted) {
+      const result = await requestPermission()
+      if (!result.granted) {
+        Alert.alert("Error", "Izin kamera ditolak")
+        return
+      }
+    }
+
+    setCameraVisible(true)
+  }
+
+  const takePicture = async () => {
+    if (cameraRef.current) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync()
+        if (photo) {
+          setFile({
+            uri: photo.uri,
+            name: `photo_${Date.now()}.jpg`,
+            mimeType: "image/jpeg",
+            size: 0,
+          })
+          setImageRemoved(false)
+          setCameraVisible(false)
+        }
+      } catch (error) {
+        console.error("Error taking picture:", error)
+        Alert.alert("Error", "Gagal mengambil gambar")
+      }
     }
   }
 
-  const openGallery = () => {
-    // Placeholder for gallery functionality
-    // In a real app, you would use react-native-image-picker or expo-image-picker
-    console.log("Opening gallery...")
-    // For demo purposes, we would upload the image and the backend would save it with the item ID
-    if (editedItem) {
-      // The actual image upload would happen here
-      // The backend would save the image using the item ID as reference
-      Alert.alert("Sukses", "Gambar berhasil dipilih dan diunggah")
+  const toggleCameraFacing = () => {
+    setFacing((current) => (current === "back" ? "front" : "back"))
+  }
+
+  const openGallery = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      })
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setFile(result.assets[0])
+        setImageRemoved(false)
+      }
+    } catch (error) {
+      console.error("Error picking document:", error)
+      Alert.alert("Error", "Terjadi kesalahan saat memilih gambar")
     }
   }
 
   const removeImage = () => {
-    Alert.alert("Hapus Gambar", "Apakah Anda yakin ingin menghapus gambar ini?", [
-      {
-        text: "Batal",
-        style: "cancel",
-      },
-      {
-        text: "Hapus",
-        style: "destructive",
-        onPress: () => {
-          if (editedItem) {
-            // In a real app, you would make an API call to delete the image
-            // The backend would remove the image associated with this item ID
-            Alert.alert("Sukses", "Gambar berhasil dihapus")
-          }
-        },
-      },
-    ])
+    setFile(null)
+    setImageRemoved(true)
+  }
+
+  if (cameraVisible) {
+    return (
+      <Modal visible={true} transparent={false} animationType="slide">
+        <View className="flex-1">
+          <CameraView ref={cameraRef} style={{ flex: 1 }} facing={facing}>
+            <View className="justify-between flex-1 p-6 bg-transparent">
+              <View className="flex-row items-center justify-between mt-12">
+                <TouchableOpacity className="p-3 rounded-full bg-black/50" onPress={() => setCameraVisible(false)}>
+                  <X size={24} color="#ffffff" />
+                </TouchableOpacity>
+                <TouchableOpacity className="p-3 rounded-full bg-black/50" onPress={toggleCameraFacing}>
+                  <RotateCcw size={24} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+              <View className="flex-row items-center justify-center mb-12">
+                <TouchableOpacity className="p-4 bg-white border-4 border-gray-300 rounded-full" onPress={takePicture}>
+                  <View className="w-16 h-16 bg-white rounded-full" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </CameraView>
+        </View>
+      </Modal>
+    )
   }
 
   return (
@@ -99,38 +172,54 @@ export default function EditModal({ visible, item, onClose, onSave }: EditModalP
           <Text className="mb-4 text-lg font-semibold text-gray-800">Edit Item</Text>
           {editedItem && (
             <>
-              {/* Image Section */}
               <Text className="mb-2 text-sm text-gray-600">Gambar Barang</Text>
               <View className="items-center mb-4">
-                {editedItem && (
+                {file ? (
                   <View className="relative">
                     <Image
-                      source={{ uri: `https://your-api-url.com/images/${editedItem.id}` }}
-                      className="w-32 h-32 rounded-[12px] bg-gray-100"
+                      source={{ uri: file.uri }}
+                      className="w-32 h-32 rounded-[12px] border-2 border-green-300"
                       resizeMode="cover"
-                      defaultSource={{ uri: "https://via.placeholder.com/150" }}
+                    />
+                    <TouchableOpacity
+                      className="absolute p-1 bg-red-500 rounded-full -top-2 -right-2"
+                      onPress={removeImage}
+                    >
+                      <X size={16} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+                ) : editedItem.image_url && !imageRemoved ? (
+                  <View className="relative">
+                    <Image
+                      source={{ uri: editedItem.image_url }}
+                      className="w-32 h-32 rounded-[12px] border-2 border-green-300"
+                      resizeMode="cover"
                       onError={(e) => console.log("Image load error:", e.nativeEvent.error)}
                     />
                     <TouchableOpacity
                       className="absolute p-1 bg-red-500 rounded-full -top-2 -right-2"
                       onPress={removeImage}
                     >
-                      <Trash2 size={16} color="#ffffff" />
+                      <X size={16} color="#ffffff" />
                     </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View className="w-32 h-32 bg-gray-100 rounded-[12px] items-center justify-center border-2 border-dashed border-gray-300">
+                    <LucideCamera size={32} color="#9CA3AF" />
+                    <Text className="mt-1 text-xs text-gray-500">Tidak ada gambar</Text>
                   </View>
                 )}
 
-                <View className="flex-row mt-3 space-x-3">
-                  <TouchableOpacity
-                    className="flex-row items-center bg-blue-100 rounded-[8px] px-3 py-2"
-                    onPress={handleImagePicker}
-                  >
-                    <Camera size={16} color="#3B82F6" />
-                    <Text className="ml-2 text-sm font-medium text-blue-600">
-                      {editedItem ? "Ganti Gambar" : "Tambah Gambar"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  className="flex-row items-center bg-blue-100 rounded-[8px] px-3 py-2 mt-3"
+                  onPress={handleImagePicker}
+                  disabled={saving}
+                >
+                  <LucideCamera size={16} color="#3B82F6" />
+                  <Text className="ml-2 text-sm font-medium text-blue-600">
+                    {hasImage ? "Ganti Gambar" : "Tambah Gambar"}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <Text className="mb-2 text-sm text-gray-600">Nama Barang</Text>
@@ -139,6 +228,7 @@ export default function EditModal({ visible, item, onClose, onSave }: EditModalP
                 value={editedItem.name}
                 onChangeText={(text) => setEditedItem({ ...editedItem, name: text })}
                 placeholder="Masukkan nama barang"
+                editable={!saving}
               />
 
               <Text className="mb-2 text-sm text-gray-600">Harga</Text>
@@ -148,6 +238,7 @@ export default function EditModal({ visible, item, onClose, onSave }: EditModalP
                 value={editedItem.price.toString()}
                 onChangeText={(text) => setEditedItem({ ...editedItem, price: Number.parseInt(text) || 0 })}
                 placeholder="0"
+                editable={!saving}
               />
 
               <Text className="mb-2 text-sm text-gray-600">Stok</Text>
@@ -157,15 +248,22 @@ export default function EditModal({ visible, item, onClose, onSave }: EditModalP
                 value={editedItem.stock.toString()}
                 onChangeText={(text) => setEditedItem({ ...editedItem, stock: Number.parseInt(text) || 0 })}
                 placeholder="0"
+                editable={!saving}
               />
             </>
           )}
           <View className="flex-row justify-end">
-            <TouchableOpacity className="px-4 py-2 bg-gray-200 rounded-[8px] mr-2" onPress={onClose}>
+            <TouchableOpacity className="px-4 py-2 bg-gray-200 rounded-[8px] mr-2" onPress={onClose} disabled={saving}>
               <Text className="text-sm text-gray-800">Batal</Text>
             </TouchableOpacity>
-            <TouchableOpacity className="px-4 py-2 bg-blue-500 rounded-[8px]" onPress={handleSave}>
-              <Text className="text-sm text-white">Simpan</Text>
+            <TouchableOpacity
+              className={`px-4 py-2 rounded-[8px] ${saving ? "bg-gray-300" : "bg-blue-500"}`}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text className={`text-sm ${saving ? "text-gray-500" : "text-white"}`}>
+                {saving ? "Menyimpan..." : "Simpan"}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

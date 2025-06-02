@@ -1,9 +1,14 @@
 
 import { Stack } from "expo-router"
+import { ToastProvider } from "~/contexts/toastContext"
 import "~/global.css"
 
 export default function RootLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}/>
+    <ToastProvider>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
+    </ToastProvider>
   )
 }
