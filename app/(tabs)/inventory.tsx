@@ -236,7 +236,7 @@ export default function Inventory() {
           <View className="relative flex-row items-center">
             <Search className="absolute" size={20} color="#9CA3AF" />
             <TextInput
-              className="flex-1 p-2 pl-8"
+              className="flex-1 p-2"
               placeholder="Cari barang..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
