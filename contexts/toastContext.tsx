@@ -1,8 +1,7 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, type ReactNode } from "react"
-import Toast from "../components/toast"
+import React, { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import Toast from "~/components/toast"
 
 interface ToastContextType {
   showToast: (message: string, type: "success" | "error" | "warning" | "info") => void
@@ -33,17 +32,17 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     type: "info",
   })
 
-  const showToast = (message: string, type: "success" | "error" | "warning" | "info") => {
+  const showToast = useCallback((message: string, type: "success" | "error" | "warning" | "info") => {
     setToast({
       visible: true,
       message,
       type,
     })
-  }
+  }, [])
 
-  const hideToast = () => {
+  const hideToast = useCallback(() => {
     setToast((prev) => ({ ...prev, visible: false }))
-  }
+  }, [])
 
   return (
     <ToastContext.Provider value={{ showToast }}>

@@ -27,13 +27,23 @@ export default function Transaction() {
   const subtotal = cart.reduce((sum, cartItem) => sum + cartItem.item.price * cartItem.quantity, 0)
   const totalItems = cart.reduce((sum, cartItem) => sum + cartItem.quantity, 0)
 
+  const sortItemsByStock = (itemList: Items[]): Items[] => {
+    return itemList.sort((a, b) => {
+      // Items with stock > 0 come first, then items with stock = 0
+      if (a.stock > 0 && b.stock === 0) return -1
+      if (a.stock === 0 && b.stock > 0) return 1
+      // Within the same stock category, sort by name
+      return a.name.localeCompare(b.name)
+    })
+  }
+
   const fetchItems = async () => {
     try {
       const data = await PosService.getItems()
-      // Only show items with stock > 0
-      const availableItems = data.filter((item) => item.stock > 0)
-      setItems(availableItems)
-      setFilteredItems(availableItems)
+      // Include all items, but sort them by stock availability
+      const sortedItems = sortItemsByStock(data)
+      setItems(sortedItems)
+      setFilteredItems(sortedItems)
     } catch (error) {
       console.error("Error fetching items:", error)
       showToast("Gagal memuat data barang", "error")
@@ -58,7 +68,8 @@ export default function Transaction() {
       setFilteredItems(items)
     } else {
       const filtered = items.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
-      setFilteredItems(filtered)
+      // Sort filtered results by stock as well
+      setFilteredItems(sortItemsByStock(filtered))
     }
   }
 
@@ -68,6 +79,12 @@ export default function Transaction() {
   }
 
   const addToCart = (item: Items) => {
+    // Prevent adding out of stock items
+    if (item.stock === 0) {
+      showToast(`${item.name} sedang habis stok`, "warning")
+      return
+    }
+
     const existingCartItem = cart.find((cartItem) => cartItem.item.id === item.id)
 
     if (existingCartItem) {
@@ -160,7 +177,7 @@ export default function Transaction() {
     <View className="flex-1 bg-white">
       <View className="p-4">
         {/* Search Bar */}
-        <View className="relative flex-row items-center mb-4 border border-gray-300 rounded-[8px] pl-4">
+        <View className="relative flex-row items-center pl-4 mb-4 border border-gray-300 rounded-[8px]">
           <Search className="absolute left-3" size={20} color="#9CA3AF" />
           <TextInput
             className="flex-1 p-3"
@@ -199,33 +216,54 @@ export default function Transaction() {
           }
           renderItem={({ item }) => {
             const quantityInCart = getItemQuantityInCart(item.id)
+            const isOutOfStock = item.stock === 0
+            const isInCart = quantityInCart > 0
 
             return (
-              <View className="w-[48%] p-3 mb-3 bg-white border border-gray-200 rounded-[8px] shadow-sm">
+              <View
+                className={`w-[48%] p-3 mb-3 border rounded-[8px] shadow-sm ${
+                  isOutOfStock ? "bg-gray-100 border-gray-300" : "bg-white border-gray-200"
+                }`}
+              >
                 <View className="items-center mb-2">
-                  <View className="w-20 h-20 mb-2 bg-gray-100 border border-gray-200 rounded-[8px] justify-center items-center">
+                  <View
+                    className={`w-20 h-20 mb-2 border rounded-[8px] justify-center items-center ${
+                      isOutOfStock ? "bg-gray-200 border-gray-300" : "bg-gray-100 border-gray-200"
+                    }`}
+                  >
                     {item.image_url ? (
                       <Image
                         source={{ uri: item.image_url }}
-                        className="w-full h-full rounded-[8px]"
+                        className={`w-full h-full rounded-[8px] ${isOutOfStock ? "opacity-50" : ""}`}
                         resizeMode="cover"
                       />
                     ) : (
-                      <Text className="text-xs text-gray-400">IMG</Text>
+                      <Text className={`text-xs ${isOutOfStock ? "text-gray-400" : "text-gray-400"}`}>IMG</Text>
                     )}
                   </View>
-                  <Text className="text-sm font-medium text-center text-gray-800" numberOfLines={2}>
+                  <Text
+                    className={`text-sm font-medium text-center ${isOutOfStock ? "text-gray-500" : "text-gray-800"}`}
+                    numberOfLines={2}
+                  >
                     {item.name}
                   </Text>
                 </View>
 
                 <View className="items-center mb-2">
-                  <Text className="mb-1 text-sm font-bold text-green-600">{formatToIDR(item.price)}</Text>
-                  <Text className="text-xs text-gray-500">Stok: {item.stock}</Text>
+                  <Text className={`mb-1 text-sm font-bold ${isOutOfStock ? "text-gray-500" : "text-green-600"}`}>
+                    {formatToIDR(item.price)}
+                  </Text>
+                  <Text className={`text-xs ${isOutOfStock ? "text-red-500 font-medium" : "text-gray-500"}`}>
+                    {isOutOfStock ? "Stok Habis" : `Stok: ${item.stock}`}
+                  </Text>
                 </View>
 
-                {/* Quantity Controls */}
-                {quantityInCart > 0 ? (
+                {/* Quantity Controls or Add Button */}
+                {isOutOfStock ? (
+                  <View className="flex-row items-center justify-center p-2 bg-gray-300 rounded-[8px]">
+                    <Text className="font-medium text-gray-500">Tidak Tersedia</Text>
+                  </View>
+                ) : isInCart ? (
                   <View className="flex-row items-center justify-center border border-gray-300 rounded-[8px]">
                     <TouchableOpacity className="items-center flex-1 p-2" onPress={() => removeFromCart(item.id)}>
                       <Minus size={16} color="#EF4444" />
@@ -262,7 +300,7 @@ export default function Transaction() {
             <ShoppingCart size={24} color="#FFFFFF" />
             <View className="ml-3">
               <Text className="font-medium text-white">{totalItems} Barang</Text>
-              <Text className="text-lg font-bold text-white">{formatToIDR(subtotal)}</Text>
+              <Text className="text-[8px] font-bold text-white">{formatToIDR(subtotal)}</Text>
             </View>
           </View>
           <View className="flex-row items-center">

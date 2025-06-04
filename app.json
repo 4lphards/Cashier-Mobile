@@ -3,7 +3,6 @@
     "name": "aplikasiKasir",
     "slug": "aplikasiKasir",
     "version": "1.0.0",
-
     "scheme": "aplikasiKasir",
     "web": {
       "bundler": "metro",
@@ -15,21 +14,19 @@
     ],
     "experiments": {
       "typedRoutes": true,
-
       "tsconfigPaths": true
     },
-
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-
     "userInterfaceStyle": "light",
-
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -37,6 +34,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
+      },
+      "package": "com.alphards.aplikasiKasir"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "912199bd-8f91-4b8d-b6a3-f354143160b2"
       }
     }
   }

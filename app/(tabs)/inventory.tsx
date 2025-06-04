@@ -3,6 +3,7 @@
 import { Search, Filter, ChevronDown, Edit, Trash2, Plus } from "lucide-react-native"
 import { TextInput, View, TouchableOpacity, FlatList, Text, RefreshControl, Image } from "react-native"
 import { useState, useEffect } from "react"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import { PosService, type Items } from "~/services/POSService"
 import { formatToIDR } from "~/utils/formatting"
 import DeleteModal from "~/components/delete-modal"
@@ -11,14 +12,20 @@ import QuickStockModal from "~/components/quick-stock-modal"
 import FilterModal from "~/components/filter-modal"
 import AddModal from "~/components/add-modal"
 import { useToast } from "~/contexts/toastContext"
+import { LowStockBanner } from "~/components/low-stock-banner"
+import { StockIndicator } from "~/components/stock-indicator"
+import { useRefresh } from "~/contexts/refreshContext"
 
 interface FilterOption {
   label: string
   value: string
 }
 
+const LOW_STOCK_THRESHOLD_KEY = "lowStockThreshold"
+
 export default function Inventory() {
   const { showToast } = useToast()
+  const { refreshKey } = useRefresh()
   const [items, setItems] = useState<Items[]>([])
   const [filteredItems, setFilteredItems] = useState<Items[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,6 +43,7 @@ export default function Inventory() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [currentFilter, setCurrentFilter] = useState<string | null>(null)
+  const [lowStockThreshold, setLowStockThreshold] = useState(10)
 
   const filterOptions = [
     { label: "A ~ Z", value: "asc" },
@@ -44,6 +52,7 @@ export default function Inventory() {
     { label: "Stok Tertinggi", value: "highStock" },
     { label: "Harga Terendah", value: "lowPrice" },
     { label: "Harga Tertinggi", value: "highPrice" },
+    { label: "Stok Menipis", value: "lowStockWarning" },
   ]
 
   const fetchItems = async () => {
@@ -60,13 +69,40 @@ export default function Inventory() {
     }
   }
 
+  const loadLowStockThreshold = async () => {
+    try {
+      const storedThreshold = await AsyncStorage.getItem(LOW_STOCK_THRESHOLD_KEY)
+      if (storedThreshold) {
+        setLowStockThreshold(Number.parseInt(storedThreshold, 10))
+      }
+    } catch (error) {
+      console.error("Error loading low stock threshold:", error)
+    }
+  }
+
   useEffect(() => {
     fetchItems()
-  })
+    loadLowStockThreshold()
+  }, [])
+
+  // Listen for settings changes (when user comes back from settings page)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadLowStockThreshold()
+    }, 1000) // Check every second when app is active
+
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    fetchItems()
+    loadLowStockThreshold()
+  }, [refreshKey, fetchItems, loadLowStockThreshold])
 
   const onRefresh = () => {
     setRefreshing(true)
     fetchItems()
+    loadLowStockThreshold() // Also reload threshold on refresh
   }
 
   const applyFiltersAndSearch = (itemList: Items[], query: string, filter: string | null) => {
@@ -97,6 +133,10 @@ export default function Inventory() {
           break
         case "highPrice":
           filtered.sort((a, b) => b.price - a.price)
+          break
+        case "lowStockWarning":
+          filtered = filtered.filter((item) => item.stock <= lowStockThreshold)
+          filtered.sort((a, b) => a.stock - b.stock) // Sort by stock, lowest first
           break
       }
     }
@@ -221,6 +261,11 @@ export default function Inventory() {
     }
   }
 
+  const showLowStockItems = () => {
+    setCurrentFilter("lowStockWarning")
+    applyFiltersAndSearch(items, searchQuery, "lowStockWarning")
+  }
+
   if (loading) {
     return (
       <View className="items-center justify-center flex-1 p-4 bg-white">
@@ -231,12 +276,16 @@ export default function Inventory() {
 
   return (
     <View className="flex-1 p-4 bg-white">
+
+      {/* Low Stock Warning Banner */}
+      <LowStockBanner items={items} threshold={lowStockThreshold} onShowLowStock={showLowStockItems} />
+
       <View className="flex-row mb-4">
         <View className="relative flex-row items-center border border-gray-300 rounded-[8px] pl-2 w-5/6">
           <View className="relative flex-row items-center">
             <Search className="absolute" size={20} color="#9CA3AF" />
             <TextInput
-              className="flex-1 p-2"
+              className="flex-1 p-2 pl-8"
               placeholder="Cari barang..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
@@ -266,7 +315,7 @@ export default function Inventory() {
       {currentFilter && (
         <View className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-[8px] justify-between flex-row">
           <Text className="text-sm text-gray-600">
-            Filter: <Text className="font-medium text-gray-800">{getFilterLabel(currentFilter)}</Text>
+            Urutan: <Text className="font-medium text-gray-800">{getFilterLabel(currentFilter)}</Text>
             {searchQuery.length > 0 && (
               <Text className="text-gray-600">
                 {" "}
@@ -335,9 +384,24 @@ export default function Inventory() {
             <View className="flex-row items-center justify-between">
               <View>
                 <Text className="mb-1 text-xs text-gray-500">Stok</Text>
-                <Text className={`text-sm font-medium ${item.stock === 0 ? "text-red-600" : "text-gray-800"}`}>
-                  {item.stock} pcs
-                </Text>
+                <View className="flex-row items-center">
+                  <Text
+                    className={`text-sm font-medium ${
+                      item.stock === 0
+                        ? "text-red-600"
+                        : item.stock <= lowStockThreshold
+                          ? "text-amber-600"
+                          : "text-gray-800"
+                    }`}
+                  >
+                    {item.stock} pcs
+                  </Text>
+                  {item.stock <= lowStockThreshold && (
+                    <View className="ml-2">
+                      <StockIndicator stock={item.stock} threshold={lowStockThreshold} />
+                    </View>
+                  )}
+                </View>
               </View>
               <View>
                 <Text className="mb-1 text-xs text-gray-500">Harga</Text>

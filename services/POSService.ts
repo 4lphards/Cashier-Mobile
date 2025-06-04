@@ -17,6 +17,7 @@ export interface TransactionItem {
   quantity: number
   price_at_time: number
   item?: Items
+  items?: Items // Add this as alternative property name
 }
 
 export interface Transaction {
@@ -24,6 +25,7 @@ export interface Transaction {
   total: number
   payment: number
   change: number
+  payment_method?: string
   created_at: string
   transaction_items?: TransactionItem[]
 }
@@ -283,8 +285,17 @@ class PosServiceClass {
     total: number
     payment: number
     change: number
+    payment_method: string // Add this field
     items: { item_id: number; quantity: number; price_at_time: number }[]
   }): Promise<Transaction | null> {
+    // Ensure payment_method matches DB enum ("Cash" or "Qris")
+    let formattedPaymentMethod = transaction.payment_method
+    if (formattedPaymentMethod.toLowerCase() === "cash") {
+      formattedPaymentMethod = "Cash"
+    } else if (formattedPaymentMethod.toLowerCase() === "qris") {
+      formattedPaymentMethod = "Qris"
+    }
+
     const { data: transactionData, error: transError } = await supabase
       .from("transactions")
       .insert([
@@ -292,6 +303,7 @@ class PosServiceClass {
           total: transaction.total,
           payment: transaction.payment,
           change: transaction.change,
+          payment_method: formattedPaymentMethod, // Store payment method
         },
       ])
       .select()
@@ -326,13 +338,22 @@ class PosServiceClass {
   }
 
   async getTransactions(limit = 50): Promise<Transaction[]> {
+    console.log("Fetching transactions with limit:", limit)
+
     const { data, error } = await supabase
       .from("transactions")
       .select(`
         *,
         transaction_items (
           *,
-          items (*)
+          items (
+            id,
+            name,
+            price,
+            stock,
+            barcode,
+            image_url
+          )
         )
       `)
       .order("created_at", { ascending: false })
@@ -343,7 +364,131 @@ class PosServiceClass {
       return []
     }
 
+    console.log("Raw transaction data:", JSON.stringify(data, null, 2))
     return data || []
+  }
+
+  async getTransactionsByDateRange(startDate: Date, endDate: Date): Promise<Transaction[]> {
+    console.log("Fetching transactions by date range:", startDate, "to", endDate)
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .select(`
+        *,
+        transaction_items (
+          *,
+          items (
+            id,
+            name,
+            price,
+            stock,
+            barcode,
+            image_url
+          )
+        )
+      `)
+      .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString())
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching transactions by date range:", error)
+      return []
+    }
+
+    console.log("Raw transaction data by date range:", JSON.stringify(data, null, 2))
+    return data || []
+  }
+
+  // Get revenue data grouped by period
+  async getRevenueByPeriod(period: "day" | "week" | "month" | "year", date: Date) {
+    const { start, end } = this.getDateRangeForPeriod(date, period)
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("total, created_at")
+      .gte("created_at", start.toISOString())
+      .lte("created_at", end.toISOString())
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching revenue data:", error)
+      return []
+    }
+
+    return data || []
+  }
+
+  // Get top selling items for a period
+  async getTopSellingItems(startDate: Date, endDate: Date, limit = 10) {
+    const { data, error } = await supabase
+      .from("transaction_items")
+      .select(`
+        item_id,
+        quantity,
+        items (name, price)
+      `)
+      .gte("created_at", startDate.toISOString())
+      .lte("created_at", endDate.toISOString())
+
+    if (error) {
+      console.error("Error fetching top selling items:", error)
+      return []
+    }
+
+    // Group by item and sum quantities
+    const itemSales = data.reduce((acc: any, item: any) => {
+      const itemId = item.item_id
+      if (!acc[itemId]) {
+        acc[itemId] = {
+          item_id: itemId,
+          name: item.items?.name || `Item ${itemId}`,
+          price: item.items?.price || 0,
+          total_quantity: 0,
+          total_revenue: 0,
+        }
+      }
+      acc[itemId].total_quantity += item.quantity
+      acc[itemId].total_revenue += item.quantity * (item.items?.price || 0)
+      return acc
+    }, {})
+
+    return Object.values(itemSales)
+      .sort((a: any, b: any) => b.total_quantity - a.total_quantity)
+      .slice(0, limit)
+  }
+
+  private getDateRangeForPeriod(date: Date, period: "day" | "week" | "month" | "year") {
+    const start = new Date(date)
+    const end = new Date(date)
+
+    switch (period) {
+      case "day":
+        start.setHours(0, 0, 0, 0)
+        end.setHours(23, 59, 59, 999)
+        break
+      case "week":
+        start.setDate(date.getDate() - date.getDay())
+        start.setHours(0, 0, 0, 0)
+        end.setDate(start.getDate() + 6)
+        end.setHours(23, 59, 59, 999)
+        break
+      case "month":
+        start.setDate(1)
+        start.setHours(0, 0, 0, 0)
+        end.setMonth(start.getMonth() + 1)
+        end.setDate(0)
+        end.setHours(23, 59, 59, 999)
+        break
+      case "year":
+        start.setMonth(0, 1)
+        start.setHours(0, 0, 0, 0)
+        end.setMonth(11, 31)
+        end.setHours(23, 59, 59, 999)
+        break
+    }
+
+    return { start, end }
   }
 }
 

@@ -6,6 +6,7 @@ import { TrendingUp, Receipt, Box } from "lucide-react-native"
 import { formatToIDR } from "~/utils/formatting"
 import { PosService, type Transaction } from "~/services/POSService"
 import { useToast } from "~/contexts/toastContext"
+import { useRefresh } from "~/contexts/refreshContext"
 
 interface DashboardData {
   totalTransactions: number
@@ -16,6 +17,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { showToast } = useToast()
+  const { refreshKey } = useRefresh()
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     totalTransactions: 0,
     totalItemsSold: 0,
@@ -60,6 +62,10 @@ export default function Dashboard() {
     }
     fetchData()
   }, [showToast])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [refreshKey, fetchDashboardData])
 
   const onRefresh = () => {
     setRefreshing(true)

@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Image } from "react-native"
-import { ChevronLeft, Plus, Minus, Trash2, CreditCard, X, ShoppingCart } from "lucide-react-native"
+import { ChevronLeft, Plus, Minus, Trash2, CreditCard, X, ShoppingCart, QrCode, Banknote } from "lucide-react-native"
 import { PosService, type Items } from "~/services/POSService"
 import { formatToIDR } from "~/utils/formatting"
 import { useToast } from "~/contexts/toastContext"
+import { useRefresh } from "~/contexts/refreshContext"
 
 interface CartItem {
   item: Items
@@ -20,6 +21,8 @@ interface CartPageProps {
   onTransactionComplete: () => Promise<void>
 }
 
+type PaymentMethod = "CASH" | "QRIS"
+
 export default function CartPage({
   cart,
   updateCartItemQuantity,
@@ -28,11 +31,13 @@ export default function CartPage({
   onTransactionComplete,
 }: CartPageProps) {
   const { showToast } = useToast()
+  const { triggerRefresh } = useRefresh()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [, setCustomerNote] = useState("")
   const [, setCustomerName] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH")
 
   // Calculate totals
   const subtotal = cart.reduce((sum, cartItem) => sum + cartItem.item.price * cartItem.quantity, 0)
@@ -51,7 +56,12 @@ export default function CartPage({
   const processTransaction = async () => {
     const payment = Number.parseFloat(paymentAmount)
 
-    if (isNaN(payment) || payment < total) {
+    // For QRIS, payment amount should match total exactly
+    if (paymentMethod === "QRIS") {
+      if (payment !== total) {
+        setPaymentAmount(total.toString())
+      }
+    } else if (isNaN(payment) || payment < total) {
       showToast("Jumlah pembayaran tidak valid", "error")
       return
     }
@@ -59,11 +69,12 @@ export default function CartPage({
     setIsProcessing(true)
 
     try {
-      const change = payment - total
+      const change = paymentMethod === "QRIS" ? 0 : payment - total
       const transactionData = {
         total,
         payment,
         change,
+        payment_method: paymentMethod,
         items: cart.map((cartItem) => ({
           item_id: cartItem.item.id,
           quantity: cartItem.quantity,
@@ -79,11 +90,30 @@ export default function CartPage({
         setPaymentAmount("")
         setCustomerName("")
         setCustomerNote("")
+        triggerRefresh() // Notify other pages to refresh
 
         // Show transaction summary
         Alert.alert(
           "Transaksi Berhasil",
-          `Transaksi #${result.id}\nTotal: ${formatToIDR(total)}\nBayar: ${formatToIDR(payment)}\nKembali: ${formatToIDR(change)}`,
+          [
+            `Transaksi #${result.id}`,
+            `Metode: ${paymentMethod === "CASH" ? "Tunai" : "QRIS"}`,
+            `Total: ${formatToIDR(total)}`,
+            ...(paymentMethod === "CASH"
+              ? [
+            `Bayar: ${formatToIDR(payment)}`,
+            `Kembali: ${formatToIDR(change)}`,
+          ]
+              : []),
+            "",
+            "Detail Item:",
+            ...cart.map(
+              (cartItem, idx) =>
+          `${idx + 1}. ${cartItem.item.name} x${cartItem.quantity} = ${formatToIDR(
+            cartItem.item.price * cartItem.quantity
+          )}`
+            ),
+          ].join("\n"),
           [{ text: "OK", onPress: onTransactionComplete }],
         )
       } else {
@@ -98,6 +128,8 @@ export default function CartPage({
   }
 
   const renderQuickAmountButtons = () => {
+    if (paymentMethod === "QRIS") return null
+
     const quickAmounts = [
       Math.ceil(total / 1000) * 1000, // Round up to nearest thousand
       Math.ceil(total / 5000) * 5000, // Round up to nearest 5k
@@ -264,33 +296,88 @@ export default function CartPage({
                 <Text className="text-2xl font-bold text-green-600">{formatToIDR(total)}</Text>
               </View>
 
+              {/* Payment Method Selection */}
               <View className="mb-4">
-                <Text className="mb-2 text-gray-600">Jumlah Bayar:</Text>
-                <TextInput
-                  className="p-3 border border-gray-300 rounded-[8px]"
-                  placeholder="Masukkan jumlah bayar"
-                  value={paymentAmount}
-                  onChangeText={setPaymentAmount}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View className="mb-4">
-                <Text className="mb-2 text-gray-600">Pembayaran Cepat:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {renderQuickAmountButtons()}
-                </ScrollView>
-              </View>
-
-              {paymentAmount &&
-                !isNaN(Number.parseFloat(paymentAmount)) &&
-                Number.parseFloat(paymentAmount) >= total && (
-                  <View className="p-3 mb-4 border border-green-200 rounded-[8px] bg-green-50">
-                    <Text className="font-medium text-green-800">
-                      Kembalian: {formatToIDR(Number.parseFloat(paymentAmount) - total)}
+                <Text className="mb-2 text-gray-600">Metode Pembayaran:</Text>
+                <View className="flex-row space-x-2">
+                  <TouchableOpacity
+                    className={`flex-1 flex-row items-center justify-center p-3 rounded-[8px] border ${
+                      paymentMethod === "CASH" ? "bg-blue-50 border-blue-300" : "bg-white border-gray-300"
+                    }`}
+                    onPress={() => {
+                      setPaymentMethod("CASH")
+                      // Reset payment amount when switching to cash
+                      if (paymentAmount === total.toString()) {
+                        setPaymentAmount("")
+                      }
+                    }}
+                  >
+                    <Banknote size={20} color={paymentMethod === "CASH" ? "#3B82F6" : "#6B7280"} className="mr-2" />
+                    <Text className={`font-medium ${paymentMethod === "CASH" ? "text-blue-600" : "text-gray-600"}`}>
+                      Tunai
                     </Text>
+                  </TouchableOpacity>
+                  <View className="w-2" />
+                  <TouchableOpacity
+                    className={`flex-1 flex-row items-center justify-center p-3 rounded-[8px] border ${
+                      paymentMethod === "QRIS" ? "bg-blue-50 border-blue-300" : "bg-white border-gray-300"
+                    }`}
+                    onPress={() => {
+                      setPaymentMethod("QRIS")
+                      // For QRIS, payment amount is always equal to total
+                      setPaymentAmount(total.toString())
+                    }}
+                  >
+                    <QrCode size={20} color={paymentMethod === "QRIS" ? "#3B82F6" : "#6B7280"} className="mr-2" />
+                    <Text className={`font-medium ${paymentMethod === "QRIS" ? "text-blue-600" : "text-gray-600"}`}>
+                      QRIS
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Payment Amount Input - Only show for CASH */}
+              {paymentMethod === "CASH" && (
+                <>
+                  <View className="mb-4">
+                    <Text className="mb-2 text-gray-600">Jumlah Bayar:</Text>
+                    <TextInput
+                      className="p-3 border border-gray-300 rounded-[8px]"
+                      placeholder="Masukkan jumlah bayar"
+                      value={paymentAmount}
+                      onChangeText={setPaymentAmount}
+                      keyboardType="numeric"
+                    />
                   </View>
-                )}
+
+                  <View className="mb-4">
+                    <Text className="mb-2 text-gray-600">Pembayaran Cepat:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {renderQuickAmountButtons()}
+                    </ScrollView>
+                  </View>
+
+                  {paymentAmount &&
+                    !isNaN(Number.parseFloat(paymentAmount)) &&
+                    Number.parseFloat(paymentAmount) >= total && (
+                      <View className="p-3 mb-4 border border-green-200 rounded-[8px] bg-green-50">
+                        <Text className="font-medium text-green-800">
+                          Kembalian: {formatToIDR(Number.parseFloat(paymentAmount) - total)}
+                        </Text>
+                      </View>
+                    )}
+                </>
+              )}
+
+              {/* QRIS Payment Instructions */}
+              {paymentMethod === "QRIS" && (
+                <View className="p-3 mb-4 border border-blue-200 rounded-[8px] bg-blue-50">
+                  <Text className="mb-2 font-medium text-blue-800">Instruksi Pembayaran QRIS:</Text>
+                  <Text className="mb-1 text-sm text-blue-700">1. Scan kode QR dengan aplikasi e-wallet</Text>
+                  <Text className="mb-1 text-sm text-blue-700">2. Pastikan jumlah pembayaran sesuai</Text>
+                  <Text className="text-sm text-blue-700">3. Konfirmasi pembayaran setelah berhasil</Text>
+                </View>
+              )}
 
               <View className="flex-row">
                 <TouchableOpacity
@@ -301,12 +388,16 @@ export default function CartPage({
                 </TouchableOpacity>
                 <TouchableOpacity
                   className={`flex-1 p-3 ml-2 rounded-[8px] ${
-                    isProcessing || !paymentAmount || Number.parseFloat(paymentAmount) < total
+                    isProcessing ||
+                    (paymentMethod === "CASH" && (!paymentAmount || Number.parseFloat(paymentAmount) < total))
                       ? "bg-gray-300"
                       : "bg-green-500"
                   }`}
                   onPress={processTransaction}
-                  disabled={isProcessing || !paymentAmount || Number.parseFloat(paymentAmount) < total}
+                  disabled={
+                    isProcessing ||
+                    (paymentMethod === "CASH" && (!paymentAmount || Number.parseFloat(paymentAmount) < total))
+                  }
                 >
                   <Text className="font-bold text-center text-white">{isProcessing ? "Memproses..." : "Proses"}</Text>
                 </TouchableOpacity>
