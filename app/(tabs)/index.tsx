@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { ScrollView, Text, View, RefreshControl } from "react-native"
 import { TrendingUp, Receipt, Box } from "lucide-react-native"
 import { formatToIDR } from "~/utils/formatting"
@@ -34,7 +34,7 @@ export default function Dashboard() {
     year: "numeric",
   })
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       const data = await PosService.getDashboardData()
       setDashboardData(data)
@@ -45,7 +45,7 @@ export default function Dashboard() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [showToast])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -146,7 +146,7 @@ export default function Dashboard() {
                 if (trx.transaction_items) {
                   for (let i = 0; i < trx.transaction_items.length; i++) {
                     const item = trx.transaction_items[i]
-                    const itemName = item.item?.name || `Item ${item.item_id}`
+                    const itemName = item.item?.name || item.items?.name || `Item ${item.item_id}`
                     const nextLength = runningLength + itemName.length + (showItems.length > 0 ? 2 : 0)
 
                     if (nextLength > charLimit) {

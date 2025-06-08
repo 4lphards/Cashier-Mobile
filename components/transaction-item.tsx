@@ -15,9 +15,6 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ transaction })
   const [isExpanded, setIsExpanded] = useState(false)
   const totalItems = transaction.transaction_items?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-  // Debug logging to see the structure
-  console.log("Transaction data:", JSON.stringify(transaction, null, 2))
-
   return (
     <View className="mb-3 bg-white border border-gray-100 shadow-sm rounded-xl">
       {/* Transaction Header */}
@@ -87,8 +84,6 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ transaction })
                     item.item?.name || item.items?.name || (item as any).name || `Item ID: ${item.item_id}`
 
                   const itemStock = item.item?.stock ?? item.items?.stock ?? (item as any).stock
-
-                  console.log("Item data:", JSON.stringify(item, null, 2))
 
                   return (
                     <View key={index} className="flex-row items-center justify-between p-3 rounded-lg bg-gray-50">

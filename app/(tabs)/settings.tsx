@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { View, Text, ScrollView, TextInput } from "react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Package } from "lucide-react-native"
@@ -70,11 +70,7 @@ export default function Settings() {
   const [settings, setSettings] = useState<InventorySettings>(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadSettings()
-  }, [])
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const keys = Object.values(STORAGE_KEYS)
       const values = await AsyncStorage.multiGet(keys)
@@ -104,7 +100,11 @@ export default function Settings() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showToast])
+
+  useEffect(() => {
+    loadSettings()
+  }, [loadSettings])
 
   const updateSetting = async <K extends keyof InventorySettings>(key: K, value: InventorySettings[K]) => {
     try {

@@ -1,13 +1,8 @@
-import React from "react";
 import { Stack } from "expo-router";
-import { ToastProvider } from "~/contexts/toastContext";
 
-const TransactionLayout: React.FC = React.memo(() => {
+export default function TransactionLayout() {
   return (
-    <ToastProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </ToastProvider>
+    <Stack screenOptions={{ headerShown: false }} />
   );
-});
+}
 
-export default TransactionLayout;

@@ -1,6 +1,6 @@
 "use client"
-import { useState, useEffect } from "react"
-import { View, Text, ScrollView, RefreshControl } from "react-native"
+import { useState, useEffect, useCallback } from "react"
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native"
 import { PosService, type Transaction } from "~/services/POSService"
 import { useToast } from "~/contexts/toastContext"
 
@@ -10,9 +10,11 @@ import { DateSelector } from "~/components/date-selector"
 import { SummaryCards, type ReportData } from "~/components/summary-cards"
 import { ChartSection } from "~/components/chart-section"
 import { TransactionList } from "~/components/transaction-list"
+import { useExcelExport } from "~/components/excel-export"
 
 export default function Reports() {
   const { showToast } = useToast()
+  const { exportToExcel } = useExcelExport()
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("day")
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [reportData, setReportData] = useState<ReportData>({
@@ -23,6 +25,7 @@ export default function Reports() {
   })
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const getDateRange = (date: Date, period: TimePeriod) => {
     const start = new Date(date)
@@ -64,7 +67,7 @@ export default function Reports() {
     return { start, end }
   }
 
-  const generateChartData = (transactions: Transaction[], period: TimePeriod) => {
+  const generateChartData = useCallback((transactions: Transaction[], period: TimePeriod) => {
     if (period === "day") return null
 
     const { start, end } = getDateRange(selectedDate, period)
@@ -134,9 +137,9 @@ export default function Reports() {
         },
       ],
     }
-  }
+  }, [selectedDate])
 
-  const fetchReportData = async () => {
+  const fetchReportData = useCallback(async () => {
     try {
       setLoading(true)
       const { start, end } = getDateRange(selectedDate, selectedPeriod)
@@ -175,15 +178,33 @@ export default function Reports() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [selectedDate, selectedPeriod, showToast, generateChartData])
 
   useEffect(() => {
     fetchReportData()
-  }, [selectedPeriod, selectedDate])
+  }, [fetchReportData])
 
   const onRefresh = () => {
     setRefreshing(true)
     fetchReportData()
+  }
+  const handleExportToExcel = async () => {
+    const exportData = {
+      totalRevenue: reportData.totalRevenue,
+      totalTransactions: reportData.totalTransactions,
+      totalItemsSold: reportData.totalItemsSold,
+      transactions: reportData.transactions,
+      period: selectedPeriod,
+      selectedDate: selectedDate
+    }
+    
+    await exportToExcel(exportData, {
+      onStart: () => setExporting(true),
+      onComplete: (success, message) => {
+        setExporting(false)
+        showToast(message, success ? 'success' : 'error')
+      }
+    })
   }
 
   if (loading) {
@@ -204,6 +225,24 @@ export default function Reports() {
       <DateSelector selectedDate={selectedDate} onDateChange={setSelectedDate} period={selectedPeriod} />
 
       <SummaryCards data={reportData} />
+
+      <TouchableOpacity
+        onPress={handleExportToExcel}
+        disabled={exporting || reportData.transactions.length === 0}
+        className={`mx-4 mb-4 p-3 rounded-[8px] ${
+          exporting || reportData.transactions.length === 0
+            ? 'bg-gray-300'
+            : 'bg-blue-500'
+        }`}
+      >
+        <Text className={`text-center font-semibold ${
+          exporting || reportData.transactions.length === 0
+            ? 'text-gray-500'
+            : 'text-white'
+        }`}>
+          {exporting ? 'Mengekspor...' : 'Ekspor ke Excel'}
+        </Text>
+      </TouchableOpacity>
 
       <ChartSection data={reportData} period={selectedPeriod} />
 

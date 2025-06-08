@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "aplikasiKasir",
+    "name": "Pipiti",
     "slug": "aplikasiKasir",
-    "version": "1.0.0",
-    "scheme": "aplikasiKasir",
+    "version": "1.0.3",
+    "scheme": "aplikasikasir",
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-file-system"
     ],
     "experiments": {
       "typedRoutes": true,

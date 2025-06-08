@@ -338,8 +338,6 @@ class PosServiceClass {
   }
 
   async getTransactions(limit = 50): Promise<Transaction[]> {
-    console.log("Fetching transactions with limit:", limit)
-
     const { data, error } = await supabase
       .from("transactions")
       .select(`
@@ -364,13 +362,10 @@ class PosServiceClass {
       return []
     }
 
-    console.log("Raw transaction data:", JSON.stringify(data, null, 2))
     return data || []
   }
 
   async getTransactionsByDateRange(startDate: Date, endDate: Date): Promise<Transaction[]> {
-    console.log("Fetching transactions by date range:", startDate, "to", endDate)
-
     const { data, error } = await supabase
       .from("transactions")
       .select(`
@@ -396,7 +391,6 @@ class PosServiceClass {
       return []
     }
 
-    console.log("Raw transaction data by date range:", JSON.stringify(data, null, 2))
     return data || []
   }
 

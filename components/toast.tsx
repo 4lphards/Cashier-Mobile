@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useCallback } from "react"
 import { Text, Animated } from "react-native"
 import { CheckCircle, XCircle, AlertCircle, Info } from "lucide-react-native"
 
@@ -15,6 +15,23 @@ interface ToastProps {
 export default function Toast({ visible, message, type, duration = 3000, onHide }: ToastProps) {
   const translateY = useRef(new Animated.Value(-100)).current
   const opacity = useRef(new Animated.Value(0)).current
+
+  const hideToast = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onHide()
+    })
+  }, [translateY, opacity, onHide])
 
   useEffect(() => {
     if (visible) {
@@ -39,24 +56,7 @@ export default function Toast({ visible, message, type, duration = 3000, onHide 
 
       return () => clearTimeout(timer)
     }
-  }, [visible])
-
-  const hideToast = () => {
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onHide()
-    })
-  }
+  }, [visible, duration, hideToast, opacity, translateY])
 
   const getToastConfig = () => {
     switch (type) {

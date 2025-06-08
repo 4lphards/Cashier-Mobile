@@ -2,7 +2,7 @@
 
 import { Search, Filter, ChevronDown, Edit, Trash2, Plus } from "lucide-react-native"
 import { TextInput, View, TouchableOpacity, FlatList, Text, RefreshControl, Image } from "react-native"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { PosService, type Items } from "~/services/POSService"
 import { formatToIDR } from "~/utils/formatting"
@@ -55,57 +55,7 @@ export default function Inventory() {
     { label: "Stok Menipis", value: "lowStockWarning" },
   ]
 
-  const fetchItems = async () => {
-    try {
-      const data = await PosService.getItems()
-      setItems(data)
-      applyFiltersAndSearch(data, searchQuery, currentFilter)
-    } catch (error) {
-      console.error("Error fetching items:", error)
-      showToast("Gagal memuat data barang", "error")
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
-  const loadLowStockThreshold = async () => {
-    try {
-      const storedThreshold = await AsyncStorage.getItem(LOW_STOCK_THRESHOLD_KEY)
-      if (storedThreshold) {
-        setLowStockThreshold(Number.parseInt(storedThreshold, 10))
-      }
-    } catch (error) {
-      console.error("Error loading low stock threshold:", error)
-    }
-  }
-
-  useEffect(() => {
-    fetchItems()
-    loadLowStockThreshold()
-  }, [])
-
-  // Listen for settings changes (when user comes back from settings page)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadLowStockThreshold()
-    }, 1000) // Check every second when app is active
-
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    fetchItems()
-    loadLowStockThreshold()
-  }, [refreshKey, fetchItems, loadLowStockThreshold])
-
-  const onRefresh = () => {
-    setRefreshing(true)
-    fetchItems()
-    loadLowStockThreshold() // Also reload threshold on refresh
-  }
-
-  const applyFiltersAndSearch = (itemList: Items[], query: string, filter: string | null) => {
+  const applyFiltersAndSearch = useCallback((itemList: Items[], query: string, filter: string | null) => {
     let filtered = [...itemList]
 
     // Apply search filter
@@ -142,7 +92,58 @@ export default function Inventory() {
     }
 
     setFilteredItems(filtered)
+  }, [lowStockThreshold])
+
+  const fetchItems = useCallback(async () => {
+    try {
+      const data = await PosService.getItems()
+      setItems(data)
+      applyFiltersAndSearch(data, searchQuery, currentFilter)
+    } catch (error) {
+      console.error("Error fetching items:", error)
+      showToast("Gagal memuat data barang", "error")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [searchQuery, currentFilter, showToast, applyFiltersAndSearch])
+
+  const loadLowStockThreshold = useCallback(async () => {
+    try {
+      const storedThreshold = await AsyncStorage.getItem(LOW_STOCK_THRESHOLD_KEY)
+      if (storedThreshold) {
+        setLowStockThreshold(Number.parseInt(storedThreshold, 10))
+      }
+    } catch (error) {
+      console.error("Error loading low stock threshold:", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchItems()
+    loadLowStockThreshold()
+  }, [fetchItems, loadLowStockThreshold])
+
+  // Listen for settings changes (when user comes back from settings page)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadLowStockThreshold()
+    }, 1000) // Check every second when app is active
+
+    return () => clearInterval(interval)
+  }, [loadLowStockThreshold])
+
+  useEffect(() => {
+    fetchItems()
+    loadLowStockThreshold()
+  }, [refreshKey, fetchItems, loadLowStockThreshold])
+
+  const onRefresh = () => {
+    setRefreshing(true)
+    fetchItems()
+    loadLowStockThreshold() // Also reload threshold on refresh
   }
+
 
   const getFilterLabel = (filterValue: string | null): string => {
     const filter = filterOptions.find((option) => option.value === filterValue)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { View, Text, TextInput, TouchableOpacity, FlatList, Image, RefreshControl } from "react-native"
 import { Search, ShoppingCart, ChevronRight, X, Plus, Minus } from "lucide-react-native"
 import { PosService, type Items } from "~/services/POSService"
@@ -37,7 +37,7 @@ export default function Transaction() {
     })
   }
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     try {
       const data = await PosService.getItems()
       // Include all items, but sort them by stock availability
@@ -51,11 +51,11 @@ export default function Transaction() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [showToast])
 
   useEffect(() => {
     fetchItems()
-  }, [])
+  }, [fetchItems])
 
   const onRefresh = () => {
     setRefreshing(true)

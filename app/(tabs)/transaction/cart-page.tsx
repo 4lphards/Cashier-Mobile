@@ -7,6 +7,7 @@ import { PosService, type Items } from "~/services/POSService"
 import { formatToIDR } from "~/utils/formatting"
 import { useToast } from "~/contexts/toastContext"
 import { useRefresh } from "~/contexts/refreshContext"
+import ReceiptShareView from "~/components/ReceiptShareView"
 
 interface CartItem {
   item: Items
@@ -38,6 +39,8 @@ export default function CartPage({
   const [, setCustomerNote] = useState("")
   const [, setCustomerName] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH")
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [lastTransaction, setLastTransaction] = useState<any>(null)
 
   // Calculate totals
   const subtotal = cart.reduce((sum, cartItem) => sum + cartItem.item.price * cartItem.quantity, 0)
@@ -91,31 +94,19 @@ export default function CartPage({
         setCustomerName("")
         setCustomerNote("")
         triggerRefresh() // Notify other pages to refresh
-
-        // Show transaction summary
-        Alert.alert(
-          "Transaksi Berhasil",
-          [
-            `Transaksi #${result.id}`,
-            `Metode: ${paymentMethod === "CASH" ? "Tunai" : "QRIS"}`,
-            `Total: ${formatToIDR(total)}`,
-            ...(paymentMethod === "CASH"
-              ? [
-            `Bayar: ${formatToIDR(payment)}`,
-            `Kembali: ${formatToIDR(change)}`,
-          ]
-              : []),
-            "",
-            "Detail Item:",
-            ...cart.map(
-              (cartItem, idx) =>
-          `${idx + 1}. ${cartItem.item.name} x${cartItem.quantity} = ${formatToIDR(
-            cartItem.item.price * cartItem.quantity
-          )}`
-            ),
-          ].join("\n"),
-          [{ text: "OK", onPress: onTransactionComplete }],
-        )
+        setLastTransaction({
+          ...transactionData,
+          id: result.id,
+          date: new Date().toLocaleString("id-ID"),
+          items: cart.map((cartItem) => ({
+            name: cartItem.item.name,
+            quantity: cartItem.quantity,
+            price: cartItem.item.price,
+            subtotal: cartItem.item.price * cartItem.quantity,
+          })),
+        })
+        setShowReceipt(true)
+        // Remove Alert.alert, show receipt instead
       } else {
         showToast("Gagal memproses transaksi", "error")
       }
@@ -160,6 +151,35 @@ export default function CartPage({
         },
       },
     ])
+  }
+
+  if (showReceipt && lastTransaction) {
+    return (
+      <View className="items-center justify-center flex-1 bg-white">
+        <ReceiptShareView
+          items={lastTransaction.items}
+          total={lastTransaction.total}
+          payment={lastTransaction.payment}
+          change={lastTransaction.change}
+          paymentMethod={lastTransaction.payment_method === "CASH" ? "Tunai" : "QRIS"}
+          transactionId={lastTransaction.id}
+          date={lastTransaction.date}
+          onShare={() => {
+            setShowReceipt(false)
+            onTransactionComplete()
+          }}
+        />
+        <TouchableOpacity
+          className="mt-4 px-6 py-3 bg-gray-200 rounded-[8px]"
+          onPress={() => {
+            setShowReceipt(false)
+            onTransactionComplete()
+          }}
+        >
+          <Text className="font-medium text-gray-700">Kembali ke Transaksi</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   return (
