@@ -106,7 +106,6 @@ export default function CartPage({
           })),
         })
         setShowReceipt(true)
-        // Remove Alert.alert, show receipt instead
       } else {
         showToast("Gagal memproses transaksi", "error")
       }
@@ -168,16 +167,11 @@ export default function CartPage({
             setShowReceipt(false)
             onTransactionComplete()
           }}
-        />
-        <TouchableOpacity
-          className="mt-4 px-6 py-3 bg-gray-200 rounded-[8px]"
-          onPress={() => {
+          onBack={() => {
             setShowReceipt(false)
             onTransactionComplete()
           }}
-        >
-          <Text className="font-medium text-gray-700">Kembali ke Transaksi</Text>
-        </TouchableOpacity>
+        />
       </View>
     )
   }
