@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Pipiti",
+    "name": "PIPITI",
     "slug": "aplikasiKasir",
-    "version": "1.0.3",
+    "version": "1.0.41",
     "scheme": "aplikasikasir",
     "web": {
       "bundler": "metro",

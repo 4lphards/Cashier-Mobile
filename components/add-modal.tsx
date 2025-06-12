@@ -1,11 +1,12 @@
 "use client"
 
 import { Modal, View, Text, TouchableOpacity, TextInput, Alert, Image } from "react-native"
-import { useState, useEffect, useRef } from "react"
-import { Camera as LucideCamera, X, RotateCcw } from "lucide-react-native"
+import { useState, useEffect } from "react"
+import { Camera as LucideCamera, X } from "lucide-react-native"
 import type { Items } from "~/services/POSService"
 import * as DocumentPicker from "expo-document-picker"
-import { CameraView, type CameraType, useCameraPermissions } from "expo-camera"
+import { formatToIDR } from "~/utils/formatting"
+import CameraModal from "./CameraModal"
 
 interface AddModalProps {
   visible: boolean
@@ -21,11 +22,9 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
     stock: 0,
   })
   const [hasImage, setHasImage] = useState(false)
-  const [cameraVisible, setCameraVisible] = useState(false)
-  const [facing, setFacing] = useState<CameraType>("back")
-  const [permission, requestPermission] = useCameraPermissions()
   const [saving, setSaving] = useState(false)
-  const cameraRef = useRef<CameraView>(null)
+  const [priceInput, setPriceInput] = useState("")
+  const [cameraVisible, setCameraVisible] = useState(false)
 
   useEffect(() => {
     if (visible) {
@@ -38,6 +37,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
       setHasImage(false)
       setFile(null)
       setSaving(false)
+      setPriceInput("")
     }
   }, [visible])
 
@@ -98,43 +98,7 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
   }
 
   const openCamera = async () => {
-    if (!permission) {
-      return
-    }
-
-    if (!permission.granted) {
-      const result = await requestPermission()
-      if (!result.granted) {
-        Alert.alert("Error", "Izin kamera ditolak")
-        return
-      }
-    }
-
     setCameraVisible(true)
-  }
-
-  const takePicture = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync()
-        if (photo) {
-          setFile({
-            uri: photo.uri,
-            name: `photo_${Date.now()}.jpg`,
-            mimeType: "image/jpeg",
-            size: 0,
-          })
-          setCameraVisible(false)
-        }
-      } catch (error) {
-        console.error("Error taking picture:", error)
-        Alert.alert("Error", "Gagal mengambil gambar")
-      }
-    }
-  }
-
-  const toggleCameraFacing = () => {
-    setFacing((current) => (current === "back" ? "front" : "back"))
   }
 
   const openGallery = async () => {
@@ -162,27 +126,20 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
 
   if (cameraVisible) {
     return (
-      <Modal visible={true} transparent={false} animationType="slide">
-        <View className="flex-1">
-          <CameraView ref={cameraRef} style={{ flex: 1 }} facing={facing}>
-            <View className="justify-between flex-1 p-6 bg-transparent">
-              <View className="flex-row items-center justify-between mt-12">
-                <TouchableOpacity className="p-3 rounded-full bg-black/50" onPress={() => setCameraVisible(false)}>
-                  <X size={24} color="#ffffff" />
-                </TouchableOpacity>
-                <TouchableOpacity className="p-3 rounded-full bg-black/50" onPress={toggleCameraFacing}>
-                  <RotateCcw size={24} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-              <View className="flex-row items-center justify-center mb-12">
-                <TouchableOpacity className="p-4 bg-white border-4 border-gray-300 rounded-full" onPress={takePicture}>
-                  <View className="w-16 h-16 bg-white rounded-full" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </CameraView>
-        </View>
-      </Modal>
+      <CameraModal
+        visible={cameraVisible}
+        onClose={() => setCameraVisible(false)}
+        onPictureTaken={(photo) => {
+          setFile({
+            uri: photo.uri,
+            name: `photo_${Date.now()}.jpg`,
+            mimeType: "image/jpeg",
+            size: 0,
+          })
+          setHasImage(true)
+          setCameraVisible(false)
+        }}
+      />
     )
   }
 
@@ -248,8 +205,12 @@ export default function AddModal({ visible, onClose, onSave }: AddModalProps) {
           <TextInput
             className="border border-gray-300 rounded-[8px] p-2 mb-4"
             keyboardType="numeric"
-            value={newItem.price > 0 ? newItem.price.toString() : ""}
-            onChangeText={(text) => setNewItem({ ...newItem, price: Number.parseInt(text) || 0 })}
+            value={priceInput}
+            onChangeText={(text) => {
+              const numeric = text.replace(/\D/g, "")
+              setNewItem({ ...newItem, price: Number.parseInt(numeric) || 0 })
+              setPriceInput(numeric ? formatToIDR(Number(numeric)) : "")
+            }}
             placeholder="0"
             editable={!saving}
           />

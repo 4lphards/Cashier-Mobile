@@ -122,7 +122,24 @@ export const useExcelExport = () => {
           { width: 10 },  // Item Count
           { width: 60 }   // Items Detail
         ]
-
+        // Add autofilter to header row
+        transactionWs['!autofilter'] = { ref: `A1:J1` }
+        // Add simple border and color to header row (open source xlsx only supports cell styles for .xlsx, not .csv)
+        for (let col = 0; col < 10; col++) {
+          const cell = transactionWs[XLSX.utils.encode_cell({ r: 0, c: col })]
+          if (cell) {
+            cell.s = {
+              fill: { fgColor: { rgb: 'FFCCE5FF' } }, // light blue
+              font: { bold: true },
+              border: {
+                top: { style: 'thin', color: { rgb: 'FF000000' } },
+                bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+                left: { style: 'thin', color: { rgb: 'FF000000' } },
+                right: { style: 'thin', color: { rgb: 'FF000000' } },
+              },
+            }
+          }
+        }
         XLSX.utils.book_append_sheet(wb, transactionWs, 'Detail Transaksi')
       }
 
@@ -169,6 +186,23 @@ export const useExcelExport = () => {
           { width: 15 }   // Subtotal
         ]
 
+        // Add autofilter, color, and border to header row
+        itemsWs['!autofilter'] = { ref: `A1:G1` }
+        for (let col = 0; col < 7; col++) {
+          const cell = itemsWs[XLSX.utils.encode_cell({ r: 0, c: col })]
+          if (cell) {
+            cell.s = {
+              fill: { fgColor: { rgb: 'FFCCE5FF' } },
+              font: { bold: true },
+              border: {
+                top: { style: 'thin', color: { rgb: 'FF000000' } },
+                bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+                left: { style: 'thin', color: { rgb: 'FF000000' } },
+                right: { style: 'thin', color: { rgb: 'FF000000' } },
+              },
+            }
+          }
+        }
         XLSX.utils.book_append_sheet(wb, itemsWs, 'Detail Item')
       }
 
@@ -235,6 +269,23 @@ export const useExcelExport = () => {
           { width: 15 }   // Contribution
         ]
 
+        // Add autofilter, color, and border to header row
+        productWs['!autofilter'] = { ref: `A1:F1` }
+        for (let col = 0; col < 6; col++) {
+          const cell = productWs[XLSX.utils.encode_cell({ r: 0, c: col })]
+          if (cell) {
+            cell.s = {
+              fill: { fgColor: { rgb: 'FFCCE5FF' } },
+              font: { bold: true },
+              border: {
+                top: { style: 'thin', color: { rgb: 'FF000000' } },
+                bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+                left: { style: 'thin', color: { rgb: 'FF000000' } },
+                right: { style: 'thin', color: { rgb: 'FF000000' } },
+              },
+            }
+          }
+        }
         XLSX.utils.book_append_sheet(wb, productWs, 'Ringkasan Produk')
       }
 
@@ -278,6 +329,23 @@ export const useExcelExport = () => {
           { width: 15 }   // Items
         ]
 
+        // Add autofilter, color, and border to header row
+        dailyWs['!autofilter'] = { ref: `A1:D1` }
+        for (let col = 0; col < 4; col++) {
+          const cell = dailyWs[XLSX.utils.encode_cell({ r: 0, c: col })]
+          if (cell) {
+            cell.s = {
+              fill: { fgColor: { rgb: 'FFCCE5FF' } },
+              font: { bold: true },
+              border: {
+                top: { style: 'thin', color: { rgb: 'FF000000' } },
+                bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+                left: { style: 'thin', color: { rgb: 'FF000000' } },
+                right: { style: 'thin', color: { rgb: 'FF000000' } },
+              },
+            }
+          }
+        }
         XLSX.utils.book_append_sheet(wb, dailyWs, 'Penjualan Harian')
       }
 
@@ -325,6 +393,23 @@ export const useExcelExport = () => {
           { width: 15 },  // Payment
           { width: 15 }   // Change
         ]
+        // Add autofilter, color, and border to header row
+        perItemTransWs['!autofilter'] = { ref: `A1:K1` }
+        for (let col = 0; col < 11; col++) {
+          const cell = perItemTransWs[XLSX.utils.encode_cell({ r: 0, c: col })]
+          if (cell) {
+            cell.s = {
+              fill: { fgColor: { rgb: 'FFCCE5FF' } },
+              font: { bold: true },
+              border: {
+                top: { style: 'thin', color: { rgb: 'FF000000' } },
+                bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+                left: { style: 'thin', color: { rgb: 'FF000000' } },
+                right: { style: 'thin', color: { rgb: 'FF000000' } },
+              },
+            }
+          }
+        }
         XLSX.utils.book_append_sheet(wb, perItemTransWs, 'Detail Per Item-Transaksi')
       }
 
